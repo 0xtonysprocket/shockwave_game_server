@@ -29,6 +29,7 @@ async fn main() {
     let active_players = Players::default();
 
     // GET /join_game -> websocket upgrade
+    println!("Configuring websocket entry point to join game");
     let join_game = warp::path("join_game")
         .and(warp::ws())
         .map(|ws: warp::ws::Ws, players| {
@@ -37,7 +38,7 @@ async fn main() {
 
     println!("Starting Game Broadcast");
     tokio::task::spawn(async move {
-        broadcaster::broadcast(active_players.clone()).await;
+        broadcaster::broadcast(&active_players).await;
     });
 
     let routes = join_game;

@@ -3,7 +3,7 @@ use tokio::time::Duration;
 mod game;
 
 // loop that broadcasts the
-pub async fn broadcast(players: Players) {
+pub async fn broadcast(players: &Players) {
     loop {
         tokio::time::sleep(Duration::from_millis(35)).await;
 
