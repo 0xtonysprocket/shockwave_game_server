@@ -463,16 +463,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multiplayer_server"
-version = "0.1.0"
-dependencies = [
- "pretty_env_logger",
- "tokio",
- "tokio-stream",
- "warp",
-]
-
-[[package]]
 name = "num_cpus"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -735,6 +725,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest 0.10.5",
+]
+
+[[package]]
+name = "shockwave_server"
+version = "0.1.0"
+dependencies = [
+ "pretty_env_logger",
+ "tokio",
+ "tokio-stream",
+ "warp",
 ]
 
 [[package]]
