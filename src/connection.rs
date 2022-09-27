@@ -1,5 +1,6 @@
+use futures::{stream::SplitStream, FutureExt, StreamExt};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use warp::ws::WebSocket;
+use warp::ws::{Message, WebSocket};
 
 use crate::{Player, Players};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -13,14 +14,14 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, NEXT_UUID
 
     eprintln!("new player joined: {}", player_id);
 
-    let (player_ws_sender, player_ws_receiver) = websocket_buffer(ws).await;
+    let (player_sender, player_ws_receiver) = websocket_buffer(ws).await;
 
     // Add player to players list
     active_players.write().await.insert(
         player_id,
         Player {
             player_id: player_id,
-            addr: player_ws_sender,
+            addr: player_sender,
         },
     );
 
@@ -31,10 +32,7 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, NEXT_UUID
     player_disconnected(player_id, &active_players).await
 }
 
-async fn execute_player_actions<S>(
-    player_ws_receiver: UnboundedReceiverStream<S>,
-    player_id: usize,
-) {
+async fn execute_player_actions(player_ws_receiver: SplitStream<WebSocket>, player_id: usize) {
     // Every time the user sends a message,
     // execute changes to game state
     while let Some(result) = player_ws_receiver.next().await {
@@ -49,7 +47,12 @@ async fn execute_player_actions<S>(
     }
 }
 
-async fn websocket_buffer<S>(ws: WebSocket) -> (UnboundedSender<S>, UnboundedReceiverStream<S>) {
+async fn websocket_buffer(
+    ws: WebSocket,
+) -> (
+    UnboundedSender<Result<Message, warp::Error>>,
+    SplitStream<WebSocket>,
+) {
     // Split the socket into a sender and receive of messages.
     let (player_ws_sender, mut player_ws_receiver) = ws.split();
 
@@ -64,7 +67,7 @@ async fn websocket_buffer<S>(ws: WebSocket) -> (UnboundedSender<S>, UnboundedRec
         }
     }));
 
-    return (player_ws_sender, player_ws_receiver);
+    return (player_sender, player_ws_receiver);
 }
 
 async fn player_disconnected(id: usize, active_players: &Players) {

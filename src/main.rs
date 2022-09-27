@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tokio::sync::{mpsc, RwLock};
 
-use warp::ws::{Message, WebSocket};
+use warp::ws::Message;
 use warp::Filter;
 
 mod broadcaster;
@@ -15,7 +15,7 @@ static NEXT_UUID: AtomicUsize = AtomicUsize::new(1);
 pub struct Player {
     pub player_id: usize,
     // pub topics: Vec<String>, for subcribing to topics later on as you move aorund
-    pub addr: mpsc::UnboundedSender<Message>,
+    pub sender: mpsc::UnboundedSender<Result<Message, warp::Error>>,
 }
 
 // define type for dictionary of players
