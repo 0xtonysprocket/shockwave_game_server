@@ -492,6 +492,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "modular"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c2b869408c1be1a4bb10a04220876741ff86dce5b616306ec59ee65fa69c171"
+
+[[package]]
 name = "multipart"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,6 +785,8 @@ name = "shockwave_server"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "log",
+ "modular",
  "pretty_env_logger",
  "tokio",
  "tokio-stream",
