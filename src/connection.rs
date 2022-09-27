@@ -21,7 +21,7 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, NEXT_UUID
         player_id,
         Player {
             player_id: player_id,
-            addr: player_sender,
+            sender: player_sender,
         },
     );
 
