@@ -1,14 +1,18 @@
+use pretty_env_logger;
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use tokio::sync::{mpsc, RwLock};
-
+use tokio::task;
+use warp;
 use warp::ws::Message;
 use warp::Filter;
 
 mod broadcaster;
 mod connection;
+mod game;
 
 static NEXT_UUID: AtomicUsize = AtomicUsize::new(1);
 
@@ -32,16 +36,25 @@ async fn main() {
     println!("Configuring websocket entry point to join game");
     let join_game = warp::path("join_game")
         .and(warp::ws())
-        .map(|ws: warp::ws::Ws, players| {
-            ws.on_upgrade(move |socket| connection::player_connection(socket, players, NEXT_UUID))
+        .and(with_active_players(active_players.clone()))
+        .map(|ws: warp::ws::Ws, active_players| {
+            ws.on_upgrade(move |socket| connection::player_connection(socket, active_players))
         });
 
+    game::initialize_game();
+
     println!("Starting Game Broadcast");
-    tokio::task::spawn(async move {
+    task::spawn(async move {
         broadcaster::broadcast(&active_players).await;
     });
 
     let routes = join_game;
 
     warp::serve(routes).run(([127, 0, 0, 1], 12345)).await;
+}
+
+fn with_active_players(
+    active_players: Players,
+) -> impl Filter<Extract = (Players,), Error = Infallible> + Clone {
+    warp::any().map(move || active_players.clone())
 }

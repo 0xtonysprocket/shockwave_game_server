@@ -1,6 +1,7 @@
+use crate::game::get_game_state;
 use crate::Players;
+use tokio;
 use tokio::time::Duration;
-mod game;
 
 // loop that broadcasts the
 pub async fn broadcast(players: &Players) {
@@ -15,11 +16,11 @@ pub async fn broadcast(players: &Players) {
         println!("{} connected player(s)", active_player_count);
 
         // get updated game state
-        let game_state = game::get_game_state();
+        let game_state = get_game_state().await;
 
         //send game state to every player
         players.read().await.iter().for_each(|(_, player)| {
-            player.sender.send(game_state);
+            player.sender.send(Ok(game_state.clone()));
         });
     }
 }

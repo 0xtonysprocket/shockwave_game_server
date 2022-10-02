@@ -1,14 +1,15 @@
 use futures::{stream::SplitStream, FutureExt, StreamExt};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
+use tokio;
+use warp;
 use warp::ws::{Message, WebSocket};
 
-use crate::{Player, Players};
+use crate::game::execute_game;
+use crate::{Player, Players, NEXT_UUID};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-mod game;
-
-pub async fn player_connection(ws: WebSocket, active_players: Players, NEXT_UUID: AtomicUsize) {
+pub async fn player_connection(ws: WebSocket, active_players: Players) {
     // increment id
     let player_id = NEXT_UUID.fetch_add(1, Ordering::Relaxed);
 
@@ -32,7 +33,7 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, NEXT_UUID
     player_disconnected(player_id, &active_players).await
 }
 
-async fn execute_player_actions(player_ws_receiver: SplitStream<WebSocket>, player_id: usize) {
+async fn execute_player_actions(mut player_ws_receiver: SplitStream<WebSocket>, player_id: usize) {
     // Every time the user sends a message,
     // execute changes to game state
     while let Some(result) = player_ws_receiver.next().await {
@@ -43,7 +44,7 @@ async fn execute_player_actions(player_ws_receiver: SplitStream<WebSocket>, play
                 break;
             }
         };
-        game::execute_game(player_id, msg).await;
+        execute_game(player_id, msg).await;
     }
 }
 
@@ -54,7 +55,7 @@ async fn websocket_buffer(
     SplitStream<WebSocket>,
 ) {
     // Split the socket into a sender and receive of messages.
-    let (player_ws_sender, mut player_ws_receiver) = ws.split();
+    let (player_ws_sender, player_ws_receiver) = ws.split();
 
     let (player_sender, player_receiver) = unbounded_channel();
 
