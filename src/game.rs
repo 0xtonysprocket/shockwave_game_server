@@ -1,6 +1,7 @@
 use modular::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::string::String;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use warp;
@@ -96,7 +97,7 @@ pub async fn get_game_state() -> Message {
 }
 
 pub async fn execute_game(player_id: usize, msg: Message) {
-    println!("execute game");
+    println!("execute game {:?}", msg);
     // update character position
     // execute mining command if present
     // record new state
