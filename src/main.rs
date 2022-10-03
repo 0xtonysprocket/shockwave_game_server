@@ -32,6 +32,9 @@ async fn main() {
     // Init hashmap to track active players
     let active_players = Players::default();
 
+    println!("initialize game");
+    let game_state = game::initialize_game().await;
+
     // GET /join_game -> websocket upgrade
     println!("Configuring websocket entry point to join game");
     let join_game = warp::path("join_game")
@@ -40,8 +43,6 @@ async fn main() {
         .map(|ws: warp::ws::Ws, active_players| {
             ws.on_upgrade(move |socket| connection::player_connection(socket, active_players))
         });
-
-    game::initialize_game();
 
     println!("Starting Game Broadcast");
     task::spawn(async move {

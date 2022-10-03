@@ -1,5 +1,5 @@
-use modular::*;
-use std::cmp::Ordering;
+//use modular::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::string::String;
 use std::sync::Arc;
@@ -10,12 +10,7 @@ use warp::ws::Message;
 const MAX_BOUND: f64 = 100.0;
 const MIN_BOUND: f64 = 0.0;
 
-pub struct Player {
-    pub player_id: usize,
-    // pub topics: Vec<String>, for subcribing to topics later on as you move aorund
-    pub sender: mpsc::UnboundedSender<Result<Message, warp::Error>>,
-}
-
+#[derive(Serialize, Deserialize)]
 pub struct Position {
     x_coordinate: f64,
     y_coordinate: f64,
@@ -37,12 +32,14 @@ pub struct Position {
 //    }
 //}
 
-pub struct PlayerCharacter {
+#[derive(Serialize, Deserialize)]
+pub struct Character {
     player_id: usize,
     position: Position,
     inventory: HashMap<String, usize>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Ore {
     ore_id: usize,
     ore_type: String,
@@ -50,7 +47,32 @@ pub struct Ore {
     position: Position,
 }
 
-fn mine_ore(mut character: PlayerCharacter, vein: Ore) {
+// define type for dictionary of players
+type Characters = Arc<RwLock<HashMap<usize, Character>>>;
+type SerializableCharacters = HashMap<usize, Character>;
+
+// define type for list of ore positions
+type OreVeins = Arc<RwLock<HashMap<usize, Ore>>>;
+type SerializableOreVeins = HashMap<usize, Ore>;
+
+#[derive(Serialize, Deserialize)]
+pub struct Instruction {
+    mine_id: usize,
+    player_postion: Position,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SerializableGame {
+    characters: SerializableCharacters,
+    ore: SerializableOreVeins,
+}
+
+pub struct Game {
+    characters: Characters,
+    ore: OreVeins,
+}
+
+fn mine_ore(mut character: Character, vein: Ore) {
     if check_proximity(character.position, vein.position) {
         character.inventory.insert(
             vein.ore_type.clone(),
@@ -77,15 +99,19 @@ fn check_proximity(character_position: Position, vein_position: Position) -> boo
     false
 }
 
-// define type for dictionary of players
-type Players = Arc<RwLock<HashMap<usize, Player>>>;
-
-// define type for list of ore positions
-type OreVeins = Arc<RwLock<HashMap<usize, Ore>>>;
-
-pub async fn initialize_game() {
+pub async fn initialize_game() -> Game {
     println!("initialize game");
+
+    // definte ore and character position maps
+    let characters: Characters = Characters::default();
+    let ore_veins: OreVeins = OreVeins::default();
+
     // initialize ore position
+
+    return Game {
+        characters: characters,
+        ore: ore_veins,
+    };
 }
 
 pub async fn get_game_state() -> Message {
@@ -98,6 +124,10 @@ pub async fn get_game_state() -> Message {
 
 pub async fn execute_game(player_id: usize, msg: Message) {
     println!("execute game {:?}", msg);
+
+    //deserialize message
+    let str_message: &str = msg.to_str().unwrap();
+    let game_instruction: Instruction = serde_json::from_str(str_message).unwrap();
     // update character position
     // execute mining command if present
     // record new state
