@@ -4,12 +4,12 @@ use tokio;
 use warp;
 use warp::ws::{Message, WebSocket};
 
-use crate::game::execute_game;
+use crate::game::{execute_game, Game};
 use crate::{Player, Players, NEXT_UUID};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-pub async fn player_connection(ws: WebSocket, active_players: Players) {
+pub async fn player_connection(ws: WebSocket, active_players: Players, game_state: Game) {
     // increment id
     let player_id = NEXT_UUID.fetch_add(1, Ordering::Relaxed);
 
@@ -44,7 +44,7 @@ async fn execute_player_actions(mut player_ws_receiver: SplitStream<WebSocket>, 
                 break;
             }
         };
-        execute_game(player_id, msg).await;
+        execute_game(player_id, msg, game_state).await;
     }
 }
 

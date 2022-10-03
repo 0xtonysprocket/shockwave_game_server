@@ -1,3 +1,4 @@
+use game::Game;
 use pretty_env_logger;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -40,8 +41,11 @@ async fn main() {
     let join_game = warp::path("join_game")
         .and(warp::ws())
         .and(with_active_players(active_players.clone()))
-        .map(|ws: warp::ws::Ws, active_players| {
-            ws.on_upgrade(move |socket| connection::player_connection(socket, active_players))
+        .and(with_game_state(game_state.clone()))
+        .map(|ws: warp::ws::Ws, active_players, game_state| {
+            ws.on_upgrade(move |socket| {
+                connection::player_connection(socket, active_players, game_state)
+            })
         });
 
     println!("Starting Game Broadcast");
@@ -58,4 +62,10 @@ fn with_active_players(
     active_players: Players,
 ) -> impl Filter<Extract = (Players,), Error = Infallible> + Clone {
     warp::any().map(move || active_players.clone())
+}
+
+fn with_game_state(
+    game_state: Game,
+) -> impl Filter<Extract = (Players,), Error = Infallible> + Clone {
+    warp::any().map(move || game_state.clone())
 }
