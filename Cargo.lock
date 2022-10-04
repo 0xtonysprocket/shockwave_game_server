@@ -802,6 +802,7 @@ dependencies = [
  "log",
  "modular",
  "pretty_env_logger",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
