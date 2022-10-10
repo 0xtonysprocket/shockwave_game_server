@@ -1,27 +1,22 @@
 //use modular::*;
+use rand::prelude::SliceRandom;
 use rand::Rng;
-use rand::prelude::v
 use serde::{Deserialize, Serialize};
-use std::array;
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::string::String;
-use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
-use warp;
-use warp::ws::Message;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-
-use crate::game;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use warp;
+use warp::ws::Message;
 
 const MAX_BOUND: f64 = 100.0;
 const MIN_BOUND: f64 = 0.0;
 const ORE_DISTANCE_BOUND: f64 = 1.0;
-const ORE_ARRAY: Vec<&str>= vec!["IRON", "SANDSTONE", "DRAGONHIDE", "CRYSTAL"];
+const ORE_ARRAY: [&str; 4] = ["IRON", "SANDSTONE", "DRAGONHIDE", "CRYSTAL"];
 static NEXT_ORE: AtomicUsize = AtomicUsize::new(1);
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Position {
     x_coordinate: f64,
     y_coordinate: f64,
@@ -87,14 +82,15 @@ pub struct SerializableGame {
     ore: SerializableOreVeins,
 }
 
+#[derive(Clone)]
 pub struct Game {
-    characters: Characters,
-    ore: OreVeins,
+    pub characters: Characters,
+    pub ore: OreVeins,
 }
 
-fn mine_ore(character: &Character, vein: &Ore) -> (Character, bool) {
+fn mine_ore<'a>(mut character: Character, vein: Ore) -> (Character, bool) {
     if check_proximity(&character.position, &vein.position) {
-        let ore_type = vein.ore_type;
+        let ore_type = &vein.ore_type;
         let ore_inv_amount = vein.amount
             + if character.inventory.contains_key(&vein.ore_type) {
                 character.inventory[&vein.ore_type]
@@ -102,19 +98,21 @@ fn mine_ore(character: &Character, vein: &Ore) -> (Character, bool) {
                 0
             };
 
-        character.inventory.insert(ore_type, ore_inv_amount);
+        character
+            .inventory
+            .insert(ore_type.to_string(), ore_inv_amount);
 
         return (
             Character {
-                player_id: character.player_id,
-                position: character.position,
-                inventory: character.inventory,
+                player_id: character.player_id.clone(),
+                position: character.position.clone(),
+                inventory: character.inventory.clone(),
             },
             true,
         );
     } else {
         println!("Player proximity to ore invalid");
-        return (*character, false);
+        return (character.clone(), false);
     }
 }
 
@@ -129,25 +127,41 @@ fn check_proximity(character_position: &Position, vein_position: &Position) -> b
     false
 }
 
-pub async fn spawn_ore(current_ore: HashMap<usize, Ore>) -> (usize, Ore) {
+pub async fn spawn_character(player_id: usize) -> Character {
     let mut rng = rand::thread_rng();
-    
+    let starting_position = Position {
+        x_coordinate: rng.gen_range(0.0..100.0),
+        y_coordinate: rng.gen_range(0.0..100.0),
+    };
+    return Character {
+        player_id: player_id,
+        position: starting_position,
+        inventory: HashMap::default(),
+    };
+}
+
+pub async fn spawn_ore<'a>(current_ore: &'a HashMap<usize, Ore>) -> (usize, Ore) {
+    let mut rng = rand::thread_rng();
+
     let ore_position: Position = 'outer_loop: loop {
         'middle_loop: loop {
-            let mut new_ore_position_delta: f64;
-            let mut first_ore: Ore;
+            let first_ore: Ore;
 
-            if let Some(&x) = current_ore.values().next() {
-                first_ore = x;
-            } else {
+            if current_ore.is_empty() {
                 first_ore = Ore {
-                    ore_id: NEXT_ORE.fetch_add(1, Ordering::Relaxed), 
-                    ore_type: ORE_ARRAY.choose(rng), 
-                    amount: rng.gen_range(1..3) as usize, 
-                    position: Position{ x_coordinate: 50, y_coordinate: 50}}
+                    ore_id: NEXT_ORE.fetch_add(1, Ordering::Relaxed),
+                    ore_type: ORE_ARRAY.choose(&mut rng).unwrap().to_string(),
+                    amount: rng.gen_range(1..3) as usize,
+                    position: Position {
+                        x_coordinate: 50.0,
+                        y_coordinate: 50.0,
+                    },
+                };
 
-                return (first_ore.ore_id, first_ore)
-            };
+                return (first_ore.ore_id, first_ore);
+            } else {
+                first_ore = current_ore.values().next().unwrap().clone();
+            }
 
             let new_ore_candidate_position = Position {
                 x_coordinate: rng.gen_range(0.0..100.0),
@@ -157,37 +171,40 @@ pub async fn spawn_ore(current_ore: HashMap<usize, Ore>) -> (usize, Ore) {
             let new_ore_position_delta =
                 Position::distance(&new_ore_candidate_position, &first_ore.position);
             if new_ore_position_delta.clone() < ORE_DISTANCE_BOUND {
-                continue 'middle_loop;
+                println!("no position conflict");
             } else {
                 break 'middle_loop;
             };
 
-            'inner_loop: while new_ore_position_delta < ORE_DISTANCE_BOUND {
-                for (key, value) in &current_ore {
+            while new_ore_position_delta < ORE_DISTANCE_BOUND {
+                for (_key, value) in current_ore {
                     let new_ore_position_delta =
                         Position::distance(&new_ore_candidate_position, &value.position);
 
                     if new_ore_position_delta < ORE_DISTANCE_BOUND {
-                        continue 'inner_loop;
+                        println!("no position conflict");
                     } else {
                         break 'middle_loop;
                     }
 
                     break 'outer_loop new_ore_candidate_position;
-                };
-            };
-        };
+                }
+            }
+        }
     };
 
-    let ore_type: String = ORE_ARRAY.choose(rng);
+    let ore_type: &str = *ORE_ARRAY.choose(&mut rng).unwrap();
+    let ore_id = NEXT_ORE.fetch_add(1, Ordering::Relaxed);
 
-
-
-    return (1, Ore {
-        ore_id: NEXT_ORE.fetch_add(1, Ordering::Relaxed), 
-        ore_type: ore_type, 
-        amount: rng.gen_range(1..3) as usize, 
-        position: ore_position})
+    return (
+        ore_id,
+        Ore {
+            ore_id: ore_id,
+            ore_type: ore_type.to_string(),
+            amount: rng.gen_range(1..3) as usize,
+            position: ore_position,
+        },
+    );
 }
 
 pub async fn initialize_game() -> Game {
@@ -197,52 +214,63 @@ pub async fn initialize_game() -> Game {
     let characters: Characters = Characters::default();
     let ore_veins: OreVeins = OreVeins::default();
 
-    let counter: usize = 0;
+    let game_state: Game = Game {
+        characters: characters,
+        ore: ore_veins,
+    };
+
+    let mut counter: usize = 0;
 
     while counter < 5 {
-        let next_ore: Ore = spawn_ore(ore_veins);
-        ore_veins.write().await.insert(next_ore.ore_id, next_ore);
+        let (ore_id, next_ore): (usize, Ore) =
+            spawn_ore(&game_state.ore.read().await.clone()).await;
+        game_state.ore.write().await.insert(ore_id, next_ore);
         counter += 1;
     }
 
     // initialize ore position
-    return Game {
-        characters: characters,
-        ore: ore_veins,
-    };
+    return game_state;
 }
 
-pub async fn get_game_state() -> Message {
+pub async fn get_game_state(game_state: &Game) -> Message {
     println!("get game state");
-    //query player character positions
-    //query ore positions
+    // TODO: serialize and broadcast game state
 
-    return Message::text("hello");
+    let current_ore: SerializableOreVeins = game_state.ore.read().await.clone();
+    let current_chars: SerializableCharacters = game_state.characters.read().await.clone();
+
+    let serializable_game: SerializableGame = SerializableGame {
+        characters: current_chars,
+        ore: current_ore,
+    };
+
+    let serialized_game = serde_json::to_string(&serializable_game).unwrap();
+
+    return Message::text(serialized_game);
 }
 
-pub async fn execute_game(player_id: usize, msg: Message, game_state: Game) {
+pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
     println!("execute game {:?}", msg);
 
     //deserialize message
     let str_message: &str = msg.to_str().unwrap();
     let game_instruction: Instruction = serde_json::from_str(str_message).unwrap();
 
-    let mut current_ore = game_state.ore.read().await.clone();
-    let current_chars = game_state.characters.read().await;
+    let current_ore = game_state.ore.read().await.clone();
+    let mut current_ore_mutable = current_ore.clone();
+    let mut current_chars = game_state.characters.read().await.clone();
 
     // mining
-    let mut character_updated: Character;
-
-    if current_ore.contains_key(&game_instruction.mine_id) {
+    let mut character_updated: Character = if current_ore.contains_key(&game_instruction.mine_id) {
         let (character_with_ore, mined) = mine_ore(
-            &current_chars[&player_id],
-            &current_ore[&game_instruction.mine_id],
+            current_chars.remove(&player_id).unwrap(),
+            current_ore[&game_instruction.mine_id].clone(),
         );
 
         if mined {
-            current_ore.remove(&game_instruction.mine_id);
+            current_ore_mutable.remove(&game_instruction.mine_id);
 
-            let (new_ore_id, new_ore) = spawn_ore(current_ore).await;
+            let (new_ore_id, new_ore) = spawn_ore(&current_ore_mutable).await;
 
             // TODO add error handling
             game_state
@@ -256,17 +284,18 @@ pub async fn execute_game(player_id: usize, msg: Message, game_state: Game) {
             println!("mining unsuccessful");
         }
 
-        character_updated = character_with_ore;
+        let character_copy = character_with_ore.clone();
+        character_copy
     } else {
         println!("not a valid ore id");
-        character_updated = Character {
+        Character {
             player_id: current_chars[&player_id].player_id,
             position: Position {
                 x_coordinate: current_chars[&player_id].position.x_coordinate,
                 y_coordinate: current_chars[&player_id].position.y_coordinate,
             },
             inventory: current_chars[&player_id].inventory.clone(),
-        };
+        }
     };
 
     //update character position
@@ -277,5 +306,5 @@ pub async fn execute_game(player_id: usize, msg: Message, game_state: Game) {
         .characters
         .write()
         .await
-        .insert(player_id, character_updated);
+        .insert(player_id, character_updated.clone());
 }

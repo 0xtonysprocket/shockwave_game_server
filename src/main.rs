@@ -1,4 +1,7 @@
-use game::Game;
+mod broadcaster;
+mod connection;
+mod game;
+
 use pretty_env_logger;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -10,10 +13,6 @@ use tokio::task;
 use warp;
 use warp::ws::Message;
 use warp::Filter;
-
-mod broadcaster;
-mod connection;
-mod game;
 
 static NEXT_UUID: AtomicUsize = AtomicUsize::new(1);
 
@@ -50,7 +49,7 @@ async fn main() {
 
     println!("Starting Game Broadcast");
     task::spawn(async move {
-        broadcaster::broadcast(&active_players).await;
+        broadcaster::broadcast(&active_players, &game_state).await;
     });
 
     let routes = join_game;
@@ -65,7 +64,7 @@ fn with_active_players(
 }
 
 fn with_game_state(
-    game_state: Game,
-) -> impl Filter<Extract = (Players,), Error = Infallible> + Clone {
+    game_state: game::Game,
+) -> impl Filter<Extract = (game::Game,), Error = Infallible> + Clone {
     warp::any().map(move || game_state.clone())
 }

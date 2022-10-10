@@ -4,7 +4,7 @@ use tokio;
 use warp;
 use warp::ws::{Message, WebSocket};
 
-use crate::game::{execute_game, Game};
+use crate::game::{execute_game, spawn_character, Game};
 use crate::{Player, Players, NEXT_UUID};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -12,6 +12,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 pub async fn player_connection(ws: WebSocket, active_players: Players, game_state: Game) {
     // increment id
     let player_id = NEXT_UUID.fetch_add(1, Ordering::Relaxed);
+    let new_character = spawn_character(player_id).await;
 
     eprintln!("new player joined: {}", player_id);
 
@@ -26,14 +27,25 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, game_stat
         },
     );
 
-    execute_player_actions(player_ws_receiver, player_id).await;
+    // Add character to game state
+    game_state
+        .characters
+        .write()
+        .await
+        .insert(player_id, new_character);
+
+    execute_player_actions(player_ws_receiver, player_id, &game_state).await;
 
     // execute_player_actions stream will keep processing as long as the user stays
     // connected. Once they disconnect, then...
-    player_disconnected(player_id, &active_players).await
+    player_disconnected(player_id, &active_players, &game_state).await;
 }
 
-async fn execute_player_actions(mut player_ws_receiver: SplitStream<WebSocket>, player_id: usize) {
+async fn execute_player_actions(
+    mut player_ws_receiver: SplitStream<WebSocket>,
+    player_id: usize,
+    game_state: &Game,
+) {
     // Every time the user sends a message,
     // execute changes to game state
     while let Some(result) = player_ws_receiver.next().await {
@@ -71,9 +83,10 @@ async fn websocket_buffer(
     return (player_sender, player_ws_receiver);
 }
 
-async fn player_disconnected(id: usize, active_players: &Players) {
+async fn player_disconnected(id: usize, active_players: &Players, game_state: &Game) {
     eprintln!("player disconnected: {}", id);
 
     // Stream closed up, so remove from the player list
     active_players.write().await.remove(&id);
+    game_state.characters.write().await.remove(&id);
 }
