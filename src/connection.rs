@@ -38,7 +38,7 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, game_stat
 
     // execute_player_actions stream will keep processing as long as the user stays
     // connected. Once they disconnect, then...
-    player_disconnected(player_id, &active_players, &game_state).await;
+    player_disconnected(player_id, &active_players, &game_state).await
 }
 
 async fn execute_player_actions(

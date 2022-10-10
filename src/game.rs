@@ -73,7 +73,7 @@ type SerializableOreVeins = HashMap<usize, Ore>;
 #[derive(Serialize, Deserialize)]
 pub struct Instruction {
     mine_id: usize,
-    player_postion: Position,
+    player_position: Position,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -250,10 +250,12 @@ pub async fn get_game_state(game_state: &Game) -> Message {
 }
 
 pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
-    println!("execute game {:?}", msg);
+    println!("execute game {:?}", &msg);
 
     //deserialize message
-    let str_message: &str = msg.to_str().unwrap();
+    let str_message: &str = msg.to_str().unwrap_or_else(|error| {
+        panic!("Not a valid game instruction: {:?}", error);
+    });
     let game_instruction: Instruction = serde_json::from_str(str_message).unwrap();
 
     let current_ore = game_state.ore.read().await.clone();
@@ -299,7 +301,7 @@ pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
     };
 
     //update character position
-    character_updated.position = game_instruction.player_postion;
+    character_updated.position = game_instruction.player_position;
 
     //record new state
     game_state
