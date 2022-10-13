@@ -28,11 +28,7 @@ pub async fn player_connection(ws: WebSocket, active_players: Players, game_stat
     );
 
     // Add character to game state
-    game_state
-        .characters
-        .write()
-        .await
-        .insert(player_id, new_character);
+    game_state.characters.write().await.push(new_character);
 
     execute_player_actions(player_ws_receiver, player_id, &game_state).await;
 
@@ -88,5 +84,13 @@ async fn player_disconnected(id: usize, active_players: &Players, game_state: &G
 
     // Stream closed up, so remove from the player list
     active_players.write().await.remove(&id);
-    game_state.characters.write().await.remove(&id);
+    game_state.characters.write().await.remove(
+        game_state
+            .characters
+            .read()
+            .await
+            .iter()
+            .position(|x| x.player_id == id)
+            .expect("player not found"),
+    );
 }
