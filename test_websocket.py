@@ -34,6 +34,7 @@ if __name__ == "__main__":
     rel.signal(2, rel.abort)  # Keyboard Interrupt
     rel.dispatch()
     instruction = {
+        "player_id": 1,
         "mine_id": 0,  # no mining
         "player_position": {"x": 1.0, "y": 1.0, "z": 1.0}
     }

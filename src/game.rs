@@ -70,6 +70,7 @@ type SerializableOreVeins = Vec<Ore>;
 
 #[derive(Serialize, Deserialize)]
 pub struct Instruction {
+    player_id: usize,
     mine_id: usize,
     player_position: Position,
 }
