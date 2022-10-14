@@ -6,7 +6,7 @@ use tokio::time::Duration;
 // loop that broadcasts the
 pub async fn broadcast(players: &Players, game_state: &Game) {
     loop {
-        tokio::time::sleep(Duration::from_millis(10000)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
         let active_player_count = players.read().await.len();
         if active_player_count == 0 {
