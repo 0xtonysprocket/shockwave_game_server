@@ -45,6 +45,7 @@ async fn execute_player_actions(
     // Every time the user sends a message,
     // execute changes to game state
     while let Some(result) = player_ws_receiver.next().await {
+        print!("{:?}", result);
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {

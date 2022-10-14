@@ -16,7 +16,7 @@ const ORE_DISTANCE_BOUND: f64 = 1.0;
 const ORE_ARRAY: [&str; 4] = ["IRON", "SANDSTONE", "DRAGONHIDE", "CRYSTAL"];
 static NEXT_ORE: AtomicUsize = AtomicUsize::new(1);
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct Position {
     x: f64,
     y: f64,
@@ -45,14 +45,14 @@ impl Position {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Character {
     pub player_id: usize,
     position: Position,
     inventory: HashMap<String, usize>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Ore {
     ore_id: usize,
     ore_type: String,
@@ -75,13 +75,13 @@ pub struct Instruction {
     player_position: Position,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SerializableGame {
     characters: SerializableCharacters,
     ore: SerializableOreVeins,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Game {
     pub characters: Characters,
     pub ore: OreVeins,
@@ -222,7 +222,6 @@ pub async fn initialize_game() -> Game {
 
 pub async fn get_game_state(game_state: &Game) -> Message {
     println!("get game state");
-    // TODO: serialize and broadcast game state
 
     let current_ore: SerializableOreVeins = game_state.ore.read().await.clone();
     let current_chars: SerializableCharacters = game_state.characters.read().await.clone();
@@ -232,7 +231,9 @@ pub async fn get_game_state(game_state: &Game) -> Message {
         ore: current_ore,
     };
 
-    let serialized_game = serde_json::to_string(&serializable_game).unwrap();
+    let serialized_game = serde_json::to_string(&serializable_game).unwrap_or_else(|error| {
+        panic!("Problem in serialization: {:?}", error);
+    });
 
     return Message::text(serialized_game);
 }
@@ -240,92 +241,98 @@ pub async fn get_game_state(game_state: &Game) -> Message {
 pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
     println!("execute game {:?}", &msg);
 
-    //deserialize message
-    let str_message: &str = msg.to_str().unwrap_or_else(|error| {
-        panic!("Not a valid game instruction: {:?}", error);
-    });
-    let game_instruction: Instruction = serde_json::from_str(str_message).unwrap();
+    if msg.is_ping() {
+        println!("ping received");
+    }
 
-    let mut current_ore_one = game_state.ore.read().await.clone();
-    let mut current_ore_two = current_ore_one.clone();
-    let mut current_chars = game_state.characters.read().await.clone();
+    if msg.is_text() {
+        //deserialize message
+        let str_message: &str = msg.to_str().unwrap_or_else(|error| {
+            panic!("Not a valid game instruction: {:?}", error);
+        });
+        let game_instruction: Instruction = serde_json::from_str(str_message).unwrap();
 
-    // mining
-    let mut character_updated: Character = if current_ore_one
-        .iter()
-        .any(|e| e.ore_id == game_instruction.mine_id)
-    {
-        let (character_with_ore, mined) = mine_ore(
-            current_chars.remove(
+        let mut current_ore_one = game_state.ore.read().await.clone();
+        let mut current_ore_two = current_ore_one.clone();
+        let mut current_chars = game_state.characters.read().await.clone();
+
+        // mining
+        let mut character_updated: Character = if current_ore_one
+            .iter()
+            .any(|e| e.ore_id == game_instruction.mine_id)
+        {
+            let (character_with_ore, mined) = mine_ore(
+                current_chars.remove(
+                    current_chars
+                        .iter()
+                        .position(|x| x.player_id == player_id)
+                        .expect("player not found"),
+                ),
+                current_ore_one.remove(
+                    current_ore_one
+                        .iter()
+                        .position(|x| x.ore_id == game_instruction.mine_id)
+                        .expect("ore not found"),
+                ),
+            );
+
+            if mined {
+                current_ore_two.remove(
+                    current_ore_two
+                        .iter()
+                        .position(|x| x.ore_id == game_instruction.mine_id)
+                        .expect("ore not found"),
+                );
+
+                let new_ore = spawn_ore(&current_ore_two).await;
+
+                // TODO add error handling
+                game_state.ore.write().await.remove(
+                    game_state
+                        .ore
+                        .read()
+                        .await
+                        .iter()
+                        .position(|x| x.ore_id == game_instruction.mine_id)
+                        .expect("ore not found"),
+                );
+
+                game_state.ore.write().await.push(new_ore);
+            } else {
+                println!("mining unsuccessful");
+            }
+            character_with_ore
+        } else {
+            println!("not a valid ore id or no mining attempted");
+
+            let character: Character = current_chars.remove(
                 current_chars
                     .iter()
                     .position(|x| x.player_id == player_id)
                     .expect("player not found"),
-            ),
-            current_ore_one.remove(
-                current_ore_one
-                    .iter()
-                    .position(|x| x.ore_id == game_instruction.mine_id)
-                    .expect("ore not found"),
-            ),
-        );
-
-        if mined {
-            current_ore_two.remove(
-                current_ore_two
-                    .iter()
-                    .position(|x| x.ore_id == game_instruction.mine_id)
-                    .expect("ore not found"),
             );
+            character
+        };
 
-            let new_ore = spawn_ore(&current_ore_two).await;
+        //update character position
+        character_updated.position = game_instruction.player_position;
 
-            // TODO add error handling
-            game_state.ore.write().await.remove(
-                game_state
-                    .ore
-                    .read()
-                    .await
-                    .iter()
-                    .position(|x| x.ore_id == game_instruction.mine_id)
-                    .expect("ore not found"),
-            );
-
-            game_state.ore.write().await.push(new_ore);
-        } else {
-            println!("mining unsuccessful");
-        }
-        character_with_ore
-    } else {
-        println!("not a valid ore id");
-
-        let character: Character = current_chars.remove(
-            current_chars
-                .iter()
-                .position(|x| x.player_id == player_id)
-                .expect("player not found"),
-        );
-        character
-    };
-
-    //update character position
-    character_updated.position = game_instruction.player_position;
-
-    //remove old character
-    game_state.characters.write().await.remove(
-        game_state
+        let index = game_state
             .characters
             .read()
             .await
             .iter()
             .position(|x| x.player_id == player_id)
-            .expect("player not found"),
-    );
+            .expect("player not found");
 
-    //record new state with replaced character
-    game_state
-        .characters
-        .write()
-        .await
-        .push(character_updated.clone());
+        //remove old character
+        game_state.characters.write().await.remove(index);
+
+        //record new state with replaced character
+        game_state
+            .characters
+            .write()
+            .await
+            .push(character_updated.clone());
+    }
 }
