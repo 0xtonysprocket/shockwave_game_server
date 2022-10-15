@@ -23,6 +23,13 @@ pub struct Position {
     z: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct Vector3 {
+    x: f64,
+    y: f64,
+    z: f64
+}
+
 impl Position {
     fn distance(p1: &Position, p2: &Position) -> f64 {
         let x_dist: f64 = (p2.x.abs() - p1.x.abs()).abs();
@@ -45,10 +52,21 @@ impl Position {
     }
 }
 
+impl Vector3 {
+    fn zero_vector() -> Vector3 {
+        return Vector3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0
+        };
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Character {
     pub player_id: usize,
     position: Position,
+    rotation: Vector3,
     inventory: HashMap<String, usize>,
 }
 
@@ -58,6 +76,7 @@ pub struct Ore {
     ore_type: String,
     amount: usize,
     position: Position,
+    rotation: Vector3
 }
 
 // define type for dictionary of players
@@ -69,10 +88,16 @@ type OreVeins = Arc<RwLock<Vec<Ore>>>;
 type SerializableOreVeins = Vec<Ore>;
 
 #[derive(Serialize, Deserialize)]
+pub struct Player {
+    position: Position,
+    rotation: Vector3
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Instruction {
     player_id: usize,
     mine_id: usize,
-    player_position: Position,
+    player: Player
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,6 +131,7 @@ fn mine_ore<'a>(mut character: Character, vein: Ore) -> (Character, bool) {
                 player_id: character.player_id.clone(),
                 position: character.position.clone(),
                 inventory: character.inventory.clone(),
+                rotation: character.rotation.clone()
             },
             true,
         );
@@ -130,6 +156,7 @@ pub async fn spawn_character(player_id: usize) -> Character {
     return Character {
         player_id: player_id,
         position: starting_position,
+        rotation: Vector3::zero_vector(),
         inventory: HashMap::default(),
     };
 }
@@ -151,6 +178,7 @@ pub async fn spawn_ore<'a>(current_ore: &'a Vec<Ore>) -> Ore {
                         y: 1.0,
                         z: 50.0,
                     },
+                    rotation: Vector3::zero_vector()
                 };
 
                 return first_ore;
@@ -193,6 +221,7 @@ pub async fn spawn_ore<'a>(current_ore: &'a Vec<Ore>) -> Ore {
         ore_type: ore_type.to_string(),
         amount: rng.gen_range(1..3) as usize,
         position: ore_position,
+        rotation: Vector3::zero_vector()
     };
 }
 
@@ -315,7 +344,8 @@ pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
         };
 
         //update character position
-        character_updated.position = game_instruction.player_position;
+        character_updated.position = game_instruction.player.position;
+        character_updated.rotation = game_instruction.player.rotation;
 
         let index = game_state
             .characters
