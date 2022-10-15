@@ -23,6 +23,13 @@ pub struct Position {
     z: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct Vector3 {
+    x: f64,
+    y: f64,
+    z: f64
+}
+
 impl Position {
     fn distance(p1: &Position, p2: &Position) -> f64 {
         let x_dist: f64 = (p2.x.abs() - p1.x.abs()).abs();
@@ -45,10 +52,21 @@ impl Position {
     }
 }
 
+impl Vector3 {
+    fn zero_vector() -> Vector3 {
+        return Vector3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0
+        };
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Character {
     pub player_id: usize,
     position: Position,
+    rotation: Vector3,
     inventory: HashMap<String, usize>,
 }
 
@@ -58,6 +76,7 @@ pub struct Ore {
     ore_type: String,
     amount: usize,
     position: Position,
+    rotation: Vector3
 }
 
 // define type for dictionary of players
@@ -130,6 +149,7 @@ pub async fn spawn_character(player_id: usize) -> Character {
     return Character {
         player_id: player_id,
         position: starting_position,
+        rotation: Vector3::zero_vector(),
         inventory: HashMap::default(),
     };
 }
@@ -193,6 +213,7 @@ pub async fn spawn_ore<'a>(current_ore: &'a Vec<Ore>) -> Ore {
         ore_type: ore_type.to_string(),
         amount: rng.gen_range(1..3) as usize,
         position: ore_position,
+        rotation: Vector3::zero_vector()
     };
 }
 
