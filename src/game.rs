@@ -345,6 +345,7 @@ pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
 
         //update character position
         character_updated.position = game_instruction.player.position;
+        character_updated.rotation = game_instruction.player.rotation;
 
         let index = game_state
             .characters
