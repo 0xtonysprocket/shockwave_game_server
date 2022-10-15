@@ -36,7 +36,10 @@ if __name__ == "__main__":
     instruction = {
         "player_id": 1,
         "mine_id": 0,  # no mining
-        "player_position": {"x": 1.0, "y": 1.0, "z": 1.0}
+        "player": {
+            position: {"x": 1.0, "y": 1.0, "z": 1.0},
+            rotation: {"x": 1.0, "y": 1.0, "z": 1.0}
+        }
     }
     ws.send(json.dumps(instruction))
     rel.signal(2, rel.abort)  # Keyboard Interrupt
