@@ -88,13 +88,16 @@ type OreVeins = Arc<RwLock<Vec<Ore>>>;
 type SerializableOreVeins = Vec<Ore>;
 
 #[derive(Serialize, Deserialize)]
+pub struct Player {
+    position: Position,
+    rotation: Vector3
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Instruction {
     player_id: usize,
     mine_id: usize,
-    player: {
-        position: Position,
-        rotation: Vector3
-    }
+    player: Player
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -128,6 +131,7 @@ fn mine_ore<'a>(mut character: Character, vein: Ore) -> (Character, bool) {
                 player_id: character.player_id.clone(),
                 position: character.position.clone(),
                 inventory: character.inventory.clone(),
+                rotation: character.rotation.clone()
             },
             true,
         );
@@ -174,6 +178,7 @@ pub async fn spawn_ore<'a>(current_ore: &'a Vec<Ore>) -> Ore {
                         y: 1.0,
                         z: 50.0,
                     },
+                    rotation: Vector3::zero_vector()
                 };
 
                 return first_ore;
