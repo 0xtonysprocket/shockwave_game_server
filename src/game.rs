@@ -91,7 +91,10 @@ type SerializableOreVeins = Vec<Ore>;
 pub struct Instruction {
     player_id: usize,
     mine_id: usize,
-    player_position: Position,
+    player: {
+        position: Position,
+        rotation: Vector3
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -336,7 +339,7 @@ pub async fn execute_game(player_id: usize, msg: Message, game_state: &Game) {
         };
 
         //update character position
-        character_updated.position = game_instruction.player_position;
+        character_updated.position = game_instruction.player.position;
 
         let index = game_state
             .characters
